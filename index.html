@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<p>SWITCHING OF LIGHT MODEL:
+<input type="button" id="ButtonG" value="Shading"/>
+</p>
+<div>
+    <label for="slide_scaling">SCALING (%): 0</label>
+    <input id="slide_scaling" type="range" min="0.01" max="2" step="0.01" value="1"/>
+    <label for="slide_scaling">200</label>
+</div>
+<div>
+<p> TRANSLATING ALONG AXES:
+    <label for="slide_translating_x">  X: </label>
+    <input id="slide_translating_x" type="range" min="-1" max="1" step="0.01" value="0"/>
+    <label for="slide_translating_x"> </label>
+
+    <label for="slide_translating_y"> Y:</label>
+    <input id="slide_translating_y" type="range" min="-1" max="1" step="0.01" value="0"/>
+    <label for="slide_translating_y"> </label>
+
+    <label for="slide_translating_z"> Z:</label>
+    <input id="slide_translating_z" type="range" min="-1" max="1" step="0.01" value="0"/>
+    <label for="slide_translating_z"> </label>
+</p>
+</div>
+
+<div>
+<p> VIEW PARAMETERS:  
+	<label for="slide_radius">Radius 0.01</label>
+	<input id="slide_radius" type="range" min="0.01" max="10" step="0.01" value="3"/>
+	<label for="slide_radius">10</label>
+
+	<label for="slide_theta">Theta </label>
+	<input id="slide_theta" type="range" min="0" max="1000" step="0.1" value="0"/>
+	<label for="slide_theta"> </label>
+
+	<label for="slide_phi">Phi </label>
+	<input id="slide_phi" type="range" min="0" max="1000" step="0.1" value="0"/>
+	<label for="slide_phi"> </label>
+</p>
+</div>
+
+<div>
+<p> PROJECTION PARAMETERS:
+    <label for="slide_near">  Near 0.01</label>
+    <input id="slide_near" type="range" min="0.01" max="3" step="0.03" value="1.1"/>
+    <label for="slide_near">3</label>
+
+    <label for="slide_far">Far 5</label>
+    <input id="slide_far" type="range" min="5" max="20" step="0.01" value="15"/>
+    <label for="slide_far">20</label>
+
+    <label for="slide_fov">Fov 10</label>
+    <input id="slide_fov" type="range" min="10" max="120" step="1" value="60"/>
+    <label for="slide_fov">120</label>
+</p>
+</div>
+
+<script id="phong-vertex-shader" type="x-shader/x-vertex">
+
+attribute vec4 vPosition;
+attribute vec4 vNormal;
+varying vec3 N, L, E;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 lightPosition;
+
+attribute  vec4 vColor;
+attribute  vec2 vTexCoord;
+
+varying vec4 fColor;
+varying vec2 fTexCoord;
+
+uniform vec3 theta;
+
+void main()
+{
+	vec3 pos = -(modelViewMatrix * vPosition).xyz;
+	vec3 light = (modelViewMatrix * lightPosition).xyz;
+	L = normalize( light - pos );
+	E = normalize(-pos);
+	N = normalize( (modelViewMatrix*vNormal).xyz);
+    // Compute the sines and cosines of theta for each of
+    //   the three axes in one computation.
+    vec3 angles = radians( theta );
+    vec3 c = cos( angles );
+    vec3 s = sin( angles );
+
+    // Remeber: these matrices are column-major
+    mat4 rx = mat4( 1.0,  0.0,  0.0, 0.0,
+		    0.0,  c.x,  s.x, 0.0,
+		    0.0, -s.x,  c.x, 0.0,
+		    0.0,  0.0,  0.0, 1.0 );
+
+    mat4 ry = mat4( c.y, 0.0, -s.y, 0.0,
+		    0.0, 1.0,  0.0, 0.0,
+		    s.y, 0.0,  c.y, 0.0,
+		    0.0, 0.0,  0.0, 1.0 );
+
+
+    mat4 rz = mat4( c.z, s.z, 0.0, 0.0,
+		    -s.z,  c.z, 0.0, 0.0,
+		    0.0,  0.0, 1.0, 0.0,
+		    0.0,  0.0, 0.0, 1.0 );
+
+    fColor = vColor;
+    fTexCoord = vTexCoord;
+    gl_Position = projectionMatrix * modelViewMatrix * rz * ry * rx * vPosition;
+    gl_Position.z = gl_Position.z;
+}
+
+</script>
+
+<script id="phong-fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+uniform vec4 ambientProduct;
+uniform vec4 diffuseProduct;
+uniform vec4 specularProduct;
+uniform float shininess;
+varying vec3 N, L, E;
+
+varying vec4 fColor;
+varying  vec2 fTexCoord;
+uniform sampler2D texture;
+
+void main()
+{
+	vec4 fColor;
+	vec3 H = normalize( L + E );
+	vec4 ambient = ambientProduct;
+	float Kd = max( dot(L, N), 0.0 );
+	vec4 diffuse = Kd*diffuseProduct;
+	float Ks = pow( max(dot(N, H), 0.0), shininess );
+	vec4 specular = Ks * specularProduct;
+	if( dot(L, N) < 0.0 ) specular = vec4(0.0, 0.0, 0.0, 1.0);
+	fColor = ambient + diffuse +specular;
+	fColor.a = 1.0;
+	gl_FragColor = fColor*texture2D( texture, fTexCoord );
+}
+
+</script>
+<script id="gouraud-vertex-shader" type="x-shader/x-vertex">
+
+attribute vec4 vPosition;
+attribute vec4 vNormal;
+varying vec4 fColor;
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 lightPosition;
+uniform float shininess;
+
+attribute  vec4 vColor;
+attribute  vec2 vTexCoord;
+
+varying vec2 fTexCoord;
+
+uniform vec3 theta;
+
+void main()
+{
+	vec3 pos = -(modelViewMatrix * vPosition).xyz;
+	vec3 light = (modelViewMatrix * lightPosition).xyz;
+	vec3 L = normalize( light - pos );
+	vec3 E = normalize( -pos );
+	vec3 H = normalize( L + E );
+	// Transform vertex normal into eye coordinates
+	vec3 N = normalize( (modelViewMatrix*vNormal).xyz);
+	// Compute terms in the illumination equation
+	vec4 ambient = ambientProduct;
+	float Kd = max( dot(L, N), 0.0 );
+	vec4 diffuse = Kd*diffuseProduct;
+	float Ks = pow( max(dot(N, H), 0.0), shininess );
+	vec4 specular = Ks * specularProduct;
+	if( dot(L, N) < 0.0 ) specular = vec4(0.0, 0.0, 0.0, 1.0);
+	
+	// Compute the sines and cosines of theta for each of
+    //   the three axes in one computation.
+    vec3 angles = radians( theta );
+    vec3 c = cos( angles );
+    vec3 s = sin( angles );
+
+    // Remeber: these matrices are column-major
+    mat4 rx = mat4( 1.0,  0.0,  0.0, 0.0,
+		    0.0,  c.x,  s.x, 0.0,
+		    0.0, -s.x,  c.x, 0.0,
+		    0.0,  0.0,  0.0, 1.0 );
+
+    mat4 ry = mat4( c.y, 0.0, -s.y, 0.0,
+		    0.0, 1.0,  0.0, 0.0,
+		    s.y, 0.0,  c.y, 0.0,
+		    0.0, 0.0,  0.0, 1.0 );
+
+
+    mat4 rz = mat4( c.z, s.z, 0.0, 0.0,
+		    -s.z,  c.z, 0.0, 0.0,
+		    0.0,  0.0, 1.0, 0.0,
+		    0.0,  0.0, 0.0, 1.0 );
+
+    fColor = vColor;
+	fTexCoord = vTexCoord;
+	
+	gl_Position = projectionMatrix * modelViewMatrix * rz * ry * rx * vPosition;
+	fColor = ambient + diffuse + specular;
+	fColor.a = 1.0;
+}
+
+</script>
+
+<script id="gouraud-fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+
+varying vec4 fColor;
+
+varying  vec2 fTexCoord;
+uniform sampler2D texture;
+
+void main()
+{
+	gl_FragColor = fColor * texture2D( texture, fTexCoord );
+}
+
+</script>
+
+<script type="text/javascript" src="Common/webgl-utils.js"></script>
+<script type="text/javascript" src="Common/initShaders.js"></script>
+<script type="text/javascript" src="Common/MV.js"></script>
+<script type="text/javascript" src="homework1.js"></script>
+
+<body>
+<canvas id="gl-canvas" width="1300" height="440">
+    Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+</body>
+</html>
